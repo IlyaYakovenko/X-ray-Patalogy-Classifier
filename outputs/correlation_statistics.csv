@@ -1,0 +1,106 @@
+Disease1,Disease2,Correlation
+Pneumothorax,Emphysema,0.17798076528346854
+Edema,Pneumonia,0.1740420619729023
+Atelectasis,Effusion,0.17246702667580147
+Effusion,Cardiomegaly,0.12982365515398833
+Infiltration,Effusion,0.11784200136625085
+Atelectasis,Consolidation,0.10904320288459743
+Consolidation,Effusion,0.10122047420213244
+Nodule,Mass,0.09993660968019842
+Infiltration,Edema,0.09400460787457435
+Atelectasis,Infiltration,0.09339318975656827
+Consolidation,Mass,0.07347651746378099
+Effusion,Pleural_Thickening,0.07192010481123152
+Infiltration,Pneumonia,0.0708538905137145
+Effusion,Mass,0.07029072808055604
+Pleural_Thickening,Mass,0.06489297641206049
+Edema,Effusion,0.06195726160975594
+Fibrosis,Pleural_Thickening,0.053578424853521864
+Pleural_Thickening,Nodule,0.049507320785579095
+Pneumothorax,Effusion,0.04759638928413282
+Consolidation,Infiltration,0.04594796478644582
+Infiltration,Nodule,0.042873314028837504
+Atelectasis,Emphysema,0.032537547326469636
+Consolidation,Nodule,0.03190263966414224
+Pneumothorax,Pleural_Thickening,0.03170200064872114
+Atelectasis,Pneumothorax,0.03139982533894905
+Pneumothorax,Mass,0.029068468699615976
+Consolidation,Pleural_Thickening,0.02873261531263556
+Edema,Cardiomegaly,0.028371370218788303
+Atelectasis,Pneumonia,0.027910025274503616
+Emphysema,Pleural_Thickening,0.02640840051678717
+Atelectasis,Pleural_Thickening,0.025177748462176155
+Consolidation,Pneumonia,0.0235904361956019
+Effusion,Pneumonia,0.02334220672715871
+Emphysema,Mass,0.02268283825047945
+Fibrosis,Nodule,0.02253004087221071
+Consolidation,Edema,0.020821934709700788
+Infiltration,Pleural_Thickening,0.020353371778236082
+Effusion,Nodule,0.01895444643366935
+Atelectasis,Mass,0.01808656774167495
+Atelectasis,Cardiomegaly,0.01584615130252555
+Consolidation,Cardiomegaly,0.015418504084242958
+Infiltration,Mass,0.01405515389562348
+Infiltration,Cardiomegaly,0.013799897949354881
+Mass,Hernia,0.012027838627301267
+Emphysema,Effusion,0.011243871597381648
+Atelectasis,Fibrosis,0.011227445022312568
+Atelectasis,Hernia,0.010871875174651572
+Fibrosis,Mass,0.009503612842101924
+Pleural_Thickening,Cardiomegaly,0.009167550659996724
+Infiltration,Fibrosis,0.008867803825065563
+Pneumothorax,Nodule,0.007511085113168462
+Fibrosis,Hernia,0.007477726760641778
+Fibrosis,Cardiomegaly,0.004396811679719566
+Consolidation,Fibrosis,0.003236323466112812
+Edema,Mass,0.0028443599560689387
+Pneumonia,Pleural_Thickening,0.0019819692378502123
+Cardiomegaly,Hernia,0.001773299148388861
+Pneumonia,Cardiomegaly,0.0013409487279828509
+Pleural_Thickening,Hernia,0.0013296714705851058
+Infiltration,Pneumothorax,0.0004495750415927811
+Consolidation,Pneumothorax,0.0003094836227844416
+Edema,Nodule,0.00030596845019528133
+Infiltration,Emphysema,0.0001754225665798216
+Pneumothorax,Fibrosis,0.00011451158144039922
+Consolidation,Emphysema,-0.0005211754736571189
+Emphysema,Fibrosis,-0.0009075962181123503
+Pneumonia,Hernia,-0.0013435037914059193
+Emphysema,Hernia,-0.0014655199213281453
+Pneumothorax,Hernia,-0.0016144639744961281
+Edema,Pleural_Thickening,-0.002032021995691711
+Edema,Hernia,-0.0023259409722331003
+Nodule,Hernia,-0.0024098184016217708
+Pneumonia,Mass,-0.002718888236649144
+Fibrosis,Effusion,-0.00274262216601094
+Atelectasis,Edema,-0.0032981204860971615
+Effusion,Hernia,-0.0036452130012021725
+Infiltration,Hernia,-0.0037564065173051335
+Pneumonia,Nodule,-0.004710412672883597
+Emphysema,Pneumonia,-0.005163126813329261
+Consolidation,Hernia,-0.005413126551143392
+Fibrosis,Pneumonia,-0.006272777202994724
+Emphysema,Nodule,-0.00701942461662311
+Emphysema,Cardiomegaly,-0.007059724762758973
+Atelectasis,Nodule,-0.00833784647346094
+Edema,Emphysema,-0.009204276572969248
+Cardiomegaly,Mass,-0.011216763133008961
+Pneumothorax,Pneumonia,-0.011523815062718306
+Cardiomegaly,Nodule,-0.012032903660208885
+Edema,Fibrosis,-0.013243149216290842
+Pneumothorax,Cardiomegaly,-0.02246441708380359
+Pneumothorax,Edema,-0.02247082372853631
+Hernia,No Finding,-0.048684891490427686
+Pneumonia,No Finding,-0.11946108044951743
+Fibrosis,No Finding,-0.13355499040735624
+Edema,No Finding,-0.15652903869241883
+Emphysema,No Finding,-0.16376641920507132
+Cardiomegaly,No Finding,-0.17209724883815458
+Pleural_Thickening,No Finding,-0.19071172478494722
+Consolidation,No Finding,-0.22526429724871377
+Pneumothorax,No Finding,-0.2407178863229141
+Mass,No Finding,-0.2512162927915564
+Nodule,No Finding,-0.26424553106660215
+Atelectasis,No Finding,-0.36603694844659207
+Effusion,No Finding,-0.3966575935931954
+Infiltration,No Finding,-0.5016473044277188
