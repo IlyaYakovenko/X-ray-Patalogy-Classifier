@@ -1,187 +1,346 @@
-import torch
-import torch.nn as nn
-import torch.optim as optim
-from torch.utils.data import DataLoader
-from sklearn.metrics import roc_auc_score, f1_score
-import pandas as pd
-import numpy as np
-from model import create_resnet50_model, setup_model_optimizer, count_trainable_parameters
-from data import ChestXRayDataset
-import albumentations as A
-from albumentations.pytorch import ToTensorV2
-import matplotlib.pyplot as plt
 import os
 import time
+import json
 
-# Гиперпараметры
-BATCH_SIZE = 32
-NUM_EPOCHS = 10
-LR = 0.001
-IMG_SIZE = 224
-DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
 
-# Аугментации и преобразования
-train_transform = A.Compose([
-    A.Resize(IMG_SIZE, IMG_SIZE),
-    A.HorizontalFlip(p=0.5),
-    A.Rotate(limit=10, p=0.3),
-    A.RandomBrightnessContrast(p=0.2),
-    A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-    ToTensorV2(),
-])
-
-val_transform = A.Compose([
-    A.Resize(IMG_SIZE, IMG_SIZE),
-    A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-    ToTensorV2(),
-])
+import torch
+from torch.utils.data import DataLoader
+from sklearn.metrics import roc_auc_score
 
 
-def train_model():
-    """Основная функция обучения модели"""
-    print(f"Используется устройство: {DEVICE}")
+import albumentations as A
+from albumentations.pytorch import ToTensorV2
 
-    # Загрузка данных
-    train_dataset = ChestXRayDataset('../data/train_labels.csv', transform=train_transform)
-    val_dataset = ChestXRayDataset('../data/val_labels.csv', transform=val_transform)
+from src.data import BalancedAugmentationChestXRayDataset, ChestXRayDataset
+from src.model import ChestXRayModel
 
-    train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=4)
-    val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=4)
 
-    # Создание модели
-    model = create_resnet50_model(num_classes=len(train_dataset.diseases), pretrained=True, freeze_weights=False)
-    model = model.to(DEVICE)
+class Trainer:
+    def __init__(self, config):
+        self.config = config
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self._create_directories()
 
-    # Печатаем информацию о модели
-    trainable_params = count_trainable_parameters(model)
-    print(f"Модель создана. Обучаемых параметров: {trainable_params:,}")
+        self.model = None
+        self.optimizer = None
+        self.criterion = None
+        self.train_loader = None
+        self.val_loader = None
 
-    # Настройка оптимизатора и функции потерь
-    optimizer = setup_model_optimizer(model, learning_rate=LR, optimizer_type='adam')
-    criterion = nn.BCEWithLogitsLoss()
+        self.history = {
+            'train_loss': [], 'val_loss': [], 'val_auc': [],
+            'val_macro_f1': [], 'val_micro_f1': [], 'learning_rates': []
+        }
 
-    # Для отслеживания лучшей модели
-    best_auc = 0
-    best_model_path = '../outputs/models/best_model.pth'
-    os.makedirs(os.path.dirname(best_model_path), exist_ok=True)
+        print("🎯 ИНИЦИАЛИЗАЦИЯ ТРЕНЕРА")
+        print(f"Конфигурация: {json.dumps(config, indent=2)}")
 
-    # История обучения
-    history = {
-        'train_loss': [],
-        'val_auc': [],
-        'val_f1': []
-    }
+    def _create_directories(self):
+        os.makedirs('/content/drive/MyDrive/X-ray/outputs/models', exist_ok=True)
+        os.makedirs('/content/drive/MyDrive/X-ray/outputs/figures', exist_ok=True)
+        os.makedirs('/content/drive/MyDrive/X-ray/outputs/logs', exist_ok=True)
 
-    print("Начинаем обучение...")
-    for epoch in range(NUM_EPOCHS):
-        # Фаза обучения
-        model.train()
+    def setup_data(self):
+        print("\n📊 ПОДГОТОВКА ДАННЫХ")
+
+        # Трансформации
+        train_transform = A.Compose([
+            A.HorizontalFlip(p=0.5),
+            A.Rotate(limit=10, p=0.3),
+            A.RandomBrightnessContrast(p=0.2),
+            A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
+            ToTensorV2(),
+        ])
+
+        val_transform = A.Compose([
+            A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
+            ToTensorV2(),
+        ])
+
+        # Сбалансированные датасеты
+        train_dataset = BalancedAugmentationChestXRayDataset(
+            csv_path='/content/drive/MyDrive/X-ray/data/train_labels.csv',
+            transform=train_transform
+        )
+
+        # Для валидации используем обычный датасет без аугментаций
+        val_dataset = ChestXRayDataset(
+            csv_path='/content/drive/MyDrive/X-ray/data/val_labels.csv',
+            transform=val_transform
+        )
+
+        self.train_loader = DataLoader(
+            train_dataset,
+            batch_size=self.config['batch_size'],
+            shuffle=True,
+            num_workers=self.config['num_workers'],
+            pin_memory=True
+        )
+
+        self.val_loader = DataLoader(
+            val_dataset,
+            batch_size=self.config['batch_size'],
+            shuffle=False,
+            num_workers=self.config['num_workers'],
+            pin_memory=True
+        )
+
+        self.diseases = train_dataset.diseases
+        print(f"✓ Тренировочный набор: {len(train_dataset)} изображений")
+        print(f"✓ Валидационный набор: {len(val_dataset)} изображений")
+
+    def setup_model(self):
+        print("\n🤖 НАСТРОЙКА МОДЕЛИ")
+
+        self.model = ChestXRayModel(
+            num_classes=len(self.diseases),
+            pretrained=self.config['pretrained'],
+            freeze_backbone=self.config['freeze_backbone']
+        )
+
+        # Передаем diseases в модель
+        self.model.diseases = self.diseases
+
+        # Настраиваем обучение (без весов!)
+        self.optimizer, self.criterion = self.model.setup_training(
+            learning_rate=self.config['learning_rate'],
+            optimizer_type=self.config['optimizer'],
+            weight_decay=self.config.get('weight_decay', 1e-4)
+        )
+
+        self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            self.optimizer, mode='max', factor=0.5, patience=3
+        )
+
+    # Остальные методы остаются без изменений
+    def train_epoch(self):
+        self.model.train()
         running_loss = 0.0
-        start_time = time.time()
+        num_batches = 0
 
-        for images, labels in train_loader:
-            images, labels = images.to(DEVICE), labels.to(DEVICE)
+        for batch_idx, (images, labels) in enumerate(self.train_loader):
+            images, labels = images.to(self.device), labels.to(self.device)
 
-            # Обнуляем градиенты
-            optimizer.zero_grad()
-
-            # Прямой проход
-            outputs = model(images)
-            loss = criterion(outputs, labels)
-
-            # Обратный проход и оптимизация
+            self.optimizer.zero_grad()
+            outputs = self.model(images)
+            loss = self.criterion(outputs, labels)
             loss.backward()
-            optimizer.step()
+            self.optimizer.step()
 
-            running_loss += loss.item() * images.size(0)
+            running_loss += loss.item()
+            num_batches += 1
 
-        # Фаза валидации
-        model.eval()
-        all_labels = []
-        all_preds = []
+            if batch_idx % 100 == 0:
+                current_lr = self.optimizer.param_groups[0]['lr']
+                print(f"  Батч {batch_idx}/{len(self.train_loader)}, Потеря: {loss.item():.4f}")
+
+        return running_loss / num_batches
+
+    def validate_epoch(self):
+        self.model.eval()
+        running_loss = 0.0
+        all_preds, all_labels = [], []
 
         with torch.no_grad():
-            for images, labels in val_loader:
-                images, labels = images.to(DEVICE), labels.to(DEVICE)
-                outputs = model(images)
-                preds = torch.sigmoid(outputs)  # Преобразуем в вероятности
+            for images, labels in self.val_loader:
+                images, labels = images.to(self.device), labels.to(self.device)
+                outputs = self.model(images)
+                loss = self.criterion(outputs, labels)
+                preds = torch.sigmoid(outputs)
 
-                all_labels.append(labels.cpu().numpy())
                 all_preds.append(preds.cpu().numpy())
+                all_labels.append(labels.cpu().numpy())
+                running_loss += loss.item()
 
-        # Объединяем результаты
-        all_labels = np.vstack(all_labels)
         all_preds = np.vstack(all_preds)
+        all_labels = np.vstack(all_labels)
 
-        # Вычисляем метрики
-        epoch_loss = running_loss / len(train_loader.dataset)
+        val_loss = running_loss / len(self.val_loader)
+        val_auc = self.calculate_auc(all_labels, all_preds)
+        threshold = self.config.get('threshold', 0.3)
+        macro_f1, micro_f1 = self.calculate_f1(all_labels, all_preds, threshold)
 
-        # ROC-AUC для каждого класса
+        print("\n📊 AUC по классам:")
         auc_scores = []
-        for i in range(all_labels.shape[1]):
+        for i, disease in enumerate(self.diseases):
             try:
                 auc = roc_auc_score(all_labels[:, i], all_preds[:, i])
                 auc_scores.append(auc)
+
+                if auc > 0.7:
+                    print(f"✅ {disease}: {auc:.4f}")
+                elif auc < 0.6:
+                    print(f"⚠️  {disease}: {auc:.4f}")
+                else:
+                    print(f"   {disease}: {auc:.4f}")
             except ValueError:
-                auc_scores.append(0.0)
+                auc_scores.append(0.5)
+                print(f"❌ {disease}: невозможно вычислить AUC")
 
-        mean_auc = np.mean(auc_scores)
+        return val_loss, val_auc, macro_f1, micro_f1
 
-        # F1-score (требуется бинаризация)
-        threshold = 0.5
-        binarized_preds = (all_preds > threshold).astype(int)
-        f1_scores = []
-        for i in range(all_labels.shape[1]):
-            f1 = f1_score(all_labels[:, i], binarized_preds[:, i], zero_division=0)
-            f1_scores.append(f1)
+    def calculate_auc(self, labels, preds):
+        """Вычисляет средний AUC по всем классам."""
+        auc_scores = []
+        for i in range(labels.shape[1]):
+            if len(np.unique(labels[:, i])) >= 2:
+                try:
+                    auc = roc_auc_score(labels[:, i], preds[:, i])
+                    auc_scores.append(auc)
+                except ValueError:
+                    auc_scores.append(0.5)
+        return np.mean(auc_scores) if auc_scores else 0.5
 
-        mean_f1 = np.mean(f1_scores)
+    def calculate_f1(self, labels, preds, threshold=0.3):
+        from sklearn.metrics import f1_score, classification_report
+        binary_preds = (preds > threshold).astype(int)
+        macro_f1 = f1_score(labels, binary_preds, average='macro', zero_division=0)
+        micro_f1 = f1_score(labels, binary_preds, average='micro', zero_division=0)
 
-        # Сохраняем историю
-        history['train_loss'].append(epoch_loss)
-        history['val_auc'].append(mean_auc)
-        history['val_f1'].append(mean_f1)
+        if labels.shape[1] <= 15:
+            print(classification_report(labels, binary_preds, target_names=self.diseases, zero_division=0))
 
-        # Сохраняем лучшую модель
-        if mean_auc > best_auc:
-            best_auc = mean_auc
-            torch.save(model.state_dict(), best_model_path)
-            print(f"Новая лучшая модель сохранена с AUC: {best_auc:.4f}")
+        return macro_f1, micro_f1
 
-        # Выводим статистику
-        epoch_time = time.time() - start_time
-        print(
-            f'Epoch {epoch + 1}/{NUM_EPOCHS}, Time: {epoch_time:.2f}s, Loss: {epoch_loss:.4f}, Val AUC: {mean_auc:.4f}, Val F1: {mean_f1:.4f}')
+    def save_checkpoint(self, epoch, is_best=False):
+        checkpoint = {
+            'epoch': epoch,
+            'model_state_dict': self.model.state_dict(),
+            'optimizer_state_dict': self.optimizer.state_dict(),
+            'scheduler_state_dict': self.scheduler.state_dict(),
+            'history': self.history,
+            'config': self.config,
+            'diseases': self.diseases
+        }
 
-    # Сохраняем историю обучения
-    history_df = pd.DataFrame(history)
-    history_df.to_csv('../outputs/training_history.csv', index=False)
+        checkpoint_path = f"/content/drive/MyDrive/X-ray/outputs/models/checkpoint_epoch_{epoch}.pth"
+        torch.save(checkpoint, checkpoint_path)
 
-    # Сохраняем финальную модель
-    final_model_path = '../outputs/models/final_model.pth'
-    torch.save(model.state_dict(), final_model_path)
+        if is_best:
+            best_model_path = "/content/drive/MyDrive/X-ray/outputs/models/best_model.pth"
+            torch.save(self.model.state_dict(), best_model_path)
+            print(f"✓ Новая лучшая модель сохранена: {best_model_path}")
 
-    # Визуализация обучения
-    plt.figure(figsize=(12, 5))
+    def plot_training_history(self):
+        fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(15, 10))
 
-    plt.subplot(1, 2, 1)
-    plt.plot(history['train_loss'])
-    plt.title('Training Loss')
-    plt.xlabel('Epoch')
+        ax1.plot(self.history['train_loss'], label='Train Loss')
+        ax1.plot(self.history['val_loss'], label='Val Loss')
+        ax1.set_title('Training and Validation Loss')
+        ax1.legend()
+        ax1.grid(True)
 
-    plt.subplot(1, 2, 2)
-    plt.plot(history['val_auc'], label='AUC')
-    plt.plot(history['val_f1'], label='F1')
-    plt.title('Validation Metrics')
-    plt.xlabel('Epoch')
-    plt.legend()
+        ax2.plot(self.history['val_auc'], label='Val AUC', color='green')
+        ax2.set_title('Validation AUC')
+        ax2.legend()
+        ax2.grid(True)
 
-    plt.tight_layout()
-    plt.savefig('../outputs/figures/training_metrics.png', dpi=300, bbox_inches='tight')
+        ax3.plot(self.history['val_macro_f1'], label='Val Macro F1', color='orange')
+        ax3.plot(self.history['val_micro_f1'], label='Val Micro F1', color='red')
+        ax3.set_title('Validation F1-Scores')
+        ax3.legend()
+        ax3.grid(True)
 
-    print(f"Обучение завершено. Лучшая AUC: {best_auc:.4f}")
-    print(f"Модели сохранены в папке ../outputs/models/")
+        ax4.plot(self.history['learning_rates'], label='Learning Rate', color='red')
+        ax4.set_title('Learning Rate Schedule')
+        ax4.set_yscale('log')
+        ax4.legend()
+        ax4.grid(True)
+
+        plt.tight_layout()
+        plt.savefig('/content/drive/MyDrive/X-ray/outputs/figures/training_history.png', dpi=300, bbox_inches='tight')
+        plt.close()
+        print("✓ Графики обучения сохранены")
+
+    def train(self):
+        print("\n🚀 ЗАПУСК ОБУЧЕНИЯ")
+        print("=" * 60)
+
+        self.setup_data()
+        self.setup_model()
+
+        best_auc = 0.0
+        start_time = time.time()
+
+        for epoch in range(1, self.config['num_epochs'] + 1):
+            epoch_start = time.time()
+
+            print(f"\n📅 ЭПОХА {epoch}/{self.config['num_epochs']}")
+            print("-" * 50)
+
+            train_loss = self.train_epoch()
+            val_loss, val_auc, macro_f1, micro_f1 = self.validate_epoch()
+
+            current_lr = self.optimizer.param_groups[0]['lr']
+            self.scheduler.step(val_auc)
+
+            # Сохраняем историю
+            self.history['train_loss'].append(train_loss)
+            self.history['val_loss'].append(val_loss)
+            self.history['val_auc'].append(val_auc)
+            self.history['val_macro_f1'].append(macro_f1)
+            self.history['val_micro_f1'].append(micro_f1)
+            self.history['learning_rates'].append(current_lr)
+
+            print(f"\n📊 РЕЗУЛЬТАТЫ ЭПОХИ {epoch}:")
+            print(f"  Train Loss: {train_loss:.4f}")
+            print(f"  Val Loss:   {val_loss:.4f}")
+            print(f"  Val AUC:    {val_auc:.4f}")
+            print(f"  Val F1:     Macro: {macro_f1:.4f}, Micro: {micro_f1:.4f}")
+            print(f"  Learning Rate: {current_lr:.6f}")
+            print(f"  Время эпохи: {time.time() - epoch_start:.2f} сек")
+
+            if epoch % 5 == 0:
+                self.save_checkpoint(epoch)
+
+            if val_auc > best_auc:
+                best_auc = val_auc
+                self.save_checkpoint(epoch, is_best=True)
+                print(f"🎉 НОВЫЙ РЕКОРД! AUC: {best_auc:.4f}")
+
+        total_time = time.time() - start_time
+        print(f"\n✅ ОБУЧЕНИЕ ЗАВЕРШЕНО за {total_time / 60:.1f} мин")
+        print(f"Лучшая AUC: {best_auc:.4f}")
+
+        self.plot_training_history()
+        self.save_checkpoint(self.config['num_epochs'])
+
+        # Сохраняем логи
+        history_df = pd.DataFrame(self.history)
+        history_df.to_csv('/content/drive/MyDrive/X-ray/outputs/logs/training_history.csv', index=False)
+
+        with open('/content/drive/MyDrive/X-ray/outputs/logs/training_config.json', 'w') as f:
+            json.dump(self.config, f, indent=2)
+
+        print("✓ Все результаты сохранены")
 
 
-if __name__ == "__main__":
-    train_model()
+TRAINING_CONFIG = {
+    'num_epochs': 10,
+    'batch_size': 128,
+    'learning_rate': 0.00982119621793305,
+    'image_size': 224,
+    'pretrained': True,
+    'freeze_backbone': True,
+    'optimizer': 'adam',
+    'num_workers': 2,
+    'threshold': 0.1,
+    'weight_decay': 1.7744079336785624e-05,
+    # Убрали max_weight и augmentation_multiplier, так как они больше не нужны
+}
+
+print("🩺 ТРЕНИРОВКА МОДЕЛИ ДЛЯ КЛАССИФИКАЦИИ РЕНТГЕНОВСКИХ СНИМКОВ")
+print("=" * 70)
+
+trainer = Trainer(TRAINING_CONFIG)
+
+try:
+    trainer.train()
+except KeyboardInterrupt:
+    print("\n⚠️ Обучение прервано пользователем")
+except Exception as e:
+    print(f"\n❌ Ошибка во время обучения: {e}")
+    raise

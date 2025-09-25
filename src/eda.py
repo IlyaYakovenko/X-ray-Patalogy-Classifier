@@ -200,17 +200,38 @@ def analyze_demographics(original_df, train_df, val_df, test_df):
     return pd.DataFrame(demo_data)
 
 
+def load_data():
+    """Загрузка всех подготовленных данных"""
+    try:
+        train_df = pd.read_csv('../data/train_labels.csv')
+        val_df = pd.read_csv('../data/val_labels.csv')
+        test_df = pd.read_csv('../data/test_labels.csv')
+
+        # Загрузим оригинальные данные для доступа к демографической информации
+        original_df = pd.read_csv('../data/Data_Entry_2017.csv')
+
+        return train_df, val_df, test_df, original_df
+    except FileNotFoundError as e:
+        print(f"Ошибка загрузки файлов: {e}")
+        print("Убедитесь, что вы выполнили data_prepare.py сначала")
+        return None, None, None, None
+
 def analyze_patient_distribution(original_df, train_df, val_df, test_df):
     """Анализ распределения снимков по пациентам"""
 
-    # Анализ распределения количества снимков на пациента
-    def get_patient_stats(df, dataset_name):
-        patient_counts = df['Patient ID'].value_counts()
+    # Используем оригинальный датафрейм для получения Patient ID
+    # Сопоставляем Image Index с Patient ID из оригинального датафрейма
+
+    def get_patient_stats(original_df, image_indices, dataset_name):
+        # Получаем соответствующие данные из оригинального датафрейма
+        df_subset = original_df[original_df['Image Index'].isin(image_indices)]
+
+        patient_counts = df_subset['Patient ID'].value_counts()
 
         stats = {
             'dataset': dataset_name,
             'total_patients': len(patient_counts),
-            'total_images': len(df),
+            'total_images': len(df_subset),
             'images_per_patient_avg': patient_counts.mean(),
             'images_per_patient_std': patient_counts.std(),
             'images_per_patient_min': patient_counts.min(),
@@ -222,9 +243,15 @@ def analyze_patient_distribution(original_df, train_df, val_df, test_df):
         return stats, patient_counts
 
     # Собираем статистику по всем наборам
-    train_stats, train_patient_counts = get_patient_stats(train_df, 'Train')
-    val_stats, val_patient_counts = get_patient_stats(val_df, 'Validation')
-    test_stats, test_patient_counts = get_patient_stats(test_df, 'Test')
+    train_stats, train_patient_counts = get_patient_stats(
+        original_df, train_df['Image Index'].values, 'Train'
+    )
+    val_stats, val_patient_counts = get_patient_stats(
+        original_df, val_df['Image Index'].values, 'Validation'
+    )
+    test_stats, test_patient_counts = get_patient_stats(
+        original_df, test_df['Image Index'].values, 'Test'
+    )
 
     # Визуализация распределения
     plt.figure(figsize=(15, 10))
