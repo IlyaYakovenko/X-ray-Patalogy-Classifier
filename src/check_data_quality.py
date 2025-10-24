@@ -7,11 +7,8 @@ import os
 
 
 def check_image_quality(csv_path, sample_size=100000):
-    """Проверка качества и единообразия изображений"""
-    # Загружаем данные
     df = pd.read_csv(csv_path)
 
-    # Статистики для анализа
     stats = {
         'width': [],
         'height': [],
@@ -22,22 +19,19 @@ def check_image_quality(csv_path, sample_size=100000):
         'corrupted_count': 0
     }
 
-    # Выбираем случайную выборку изображений для анализа
 
-    print(f"Проверка качества {len(df)} изображений...")
+    print(f"Проверка качества {len(df)} изображений")
 
     for _, row in tqdm(df.iterrows(), total=len(df)):
         image_path = row['image_path']
 
         try:
-            # Пытаемся загрузить изображение
             image = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
 
             if image is None:
                 stats['corrupted_count'] += 1
                 continue
 
-            # Собираем статистику
             stats['width'].append(image.shape[1])
             stats['height'].append(image.shape[0])
             stats['mean_intensity'].append(np.mean(image))
@@ -49,7 +43,6 @@ def check_image_quality(csv_path, sample_size=100000):
             stats['corrupted_count'] += 1
             print(f"Ошибка при обработке {image_path}: {e}")
 
-    # Анализируем собранную статистику
     print("\n=== РЕЗУЛЬТАТЫ ПРОВЕРКИ КАЧЕСТВА ===")
     print(f"Битых изображений: {stats['corrupted_count']} ({stats['corrupted_count'] / len(df) * 100:.2f}%)")
 
@@ -64,7 +57,6 @@ def check_image_quality(csv_path, sample_size=100000):
         print(f"  Минимальная: {np.mean(stats['min_intensity']):.1f}")
         print(f"  Максимальная: {np.mean(stats['max_intensity']):.1f}")
 
-        # Визуализируем распределение размеров
         plt.figure(figsize=(12, 5))
 
         plt.subplot(1, 2, 1)
@@ -82,7 +74,6 @@ def check_image_quality(csv_path, sample_size=100000):
         plt.tight_layout()
         plt.savefig('../outputs/figures/image_size_distribution.png', dpi=300, bbox_inches='tight')
 
-        # Визуализируем распределение интенсивности
         plt.figure(figsize=(12, 5))
 
         plt.subplot(1, 2, 1)
@@ -108,9 +99,7 @@ def check_image_quality(csv_path, sample_size=100000):
 
 
 if __name__ == "__main__":
-    # Создаем папку для результатов
     os.makedirs('../outputs/figures', exist_ok=True)
 
-    # Проверяем качество изображений в тренировочном наборе
     check_image_quality('../data/train_labels.csv')
 

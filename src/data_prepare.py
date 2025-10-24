@@ -26,7 +26,6 @@ def balance_no_finding(df, max_ratio=0.3, random_state=42):
     max_no_finding = int(len(pathology_df) * max_ratio / (1 - max_ratio))
 
     if len(no_finding_df) > max_no_finding:
-        # Берем случайную выборку No Finding
         no_finding_df = no_finding_df.sample(n=max_no_finding, random_state=random_state)
         print(f"✓ No Finding ограничено: {len(no_finding_df)} примеров ({max_ratio * 100}%)")
     else:
@@ -35,7 +34,7 @@ def balance_no_finding(df, max_ratio=0.3, random_state=42):
     balanced_df = pd.concat([pathology_df, no_finding_df])
     balanced_df = balanced_df.sample(frac=1, random_state=random_state)
 
-    print(f"📊 После балансировки:")
+    print(f" После балансировки:")
     print(f"  - Всего примеров: {len(balanced_df)}")
     print(f"  - Доля No Finding: {len(no_finding_df) / len(balanced_df):.2%}")
 

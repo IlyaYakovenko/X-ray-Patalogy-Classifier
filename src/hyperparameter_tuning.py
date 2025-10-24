@@ -34,7 +34,7 @@ class OptunaTuner:
             'augmentation_multiplier': trial.suggest_int('augmentation_multiplier', 1, 5),
         }
 
-        print(f"\n🎯 Trial {trial.number}: "
+        print(f"\n Trial {trial.number}: "
               f"max_weight={hyperparams['max_weight']}, "
               f"alpha={hyperparams['focal_alpha']}, "
               f"gamma={hyperparams['focal_gamma']}, "
@@ -49,7 +49,7 @@ class OptunaTuner:
             return best_auc
 
         except Exception as e:
-            print(f"❌ Trial {trial.number} failed: {e}")
+            print(f" Trial {trial.number} failed: {e}")
             return 0.5
 
     def fast_train_evaluate(self, hyperparams, trial):

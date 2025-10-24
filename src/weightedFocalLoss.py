@@ -12,16 +12,10 @@ class WeightedFocalLoss(nn.Module):
         self.reduction = reduction
 
     def forward(self, inputs, targets):
-
-
-
         probs = torch.sigmoid(inputs)
-
-
         bce_loss = F.binary_cross_entropy_with_logits(
             inputs, targets, reduction='none'
         )
-
 
         focal_weights = torch.where(
             targets == 1,
@@ -29,13 +23,11 @@ class WeightedFocalLoss(nn.Module):
             probs.pow(self.gamma)
         )
 
-
         weight_matrix = torch.where(
             targets == 1,
             self.class_weights.unsqueeze(0),
             torch.ones_like(inputs)
         )
-
 
         focal_loss = self.alpha * weight_matrix * focal_weights * bce_loss
 

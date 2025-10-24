@@ -2,23 +2,19 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
-from collections import Counter
 import os
 
-# Настройки визуализации
 plt.style.use('ggplot')
 sns.set_palette("Set2")
 plt.rcParams['figure.figsize'] = (12, 8)
 
 
 def load_data():
-    """Загрузка всех подготовленных данных"""
     try:
         train_df = pd.read_csv('../data/train_labels.csv')
         val_df = pd.read_csv('../data/val_labels.csv')
         test_df = pd.read_csv('../data/test_labels.csv')
 
-        # Загрузим оригинальные данные для доступа к демографической информации
         original_df = pd.read_csv('../data/Data_Entry_2017.csv')
 
         return train_df, val_df, test_df, original_df
@@ -29,10 +25,8 @@ def load_data():
 
 
 def check_patient_overlap(original_df, train_df, val_df, test_df):
-    """Проверка пересечения пациентов между наборами данных"""
     print("Проверка пересечения пациентов между наборами:")
 
-    # Получим ID пациентов для каждого набора
     train_patients = set(original_df[original_df['Image Index'].isin(train_df['Image Index'])]['Patient ID'])
     val_patients = set(original_df[original_df['Image Index'].isin(val_df['Image Index'])]['Patient ID'])
     test_patients = set(original_df[original_df['Image Index'].isin(test_df['Image Index'])]['Patient ID'])
@@ -47,26 +41,21 @@ def check_patient_overlap(original_df, train_df, val_df, test_df):
 
 
 def analyze_label_distribution(train_df, val_df, test_df, diseases):
-    """Анализ распределения меток по наборам данных"""
     fig, axes = plt.subplots(2, 2, figsize=(20, 15))
     axes = axes.ravel()
 
-    # Создадим DataFrame для сравнения распределения меток
     comparison_data = []
 
     datasets = [train_df, val_df, test_df]
     dataset_names = ['Train', 'Validation', 'Test']
 
     for i, (df, name) in enumerate(zip(datasets, dataset_names)):
-        # Подсчет частоты каждого заболевания
         disease_counts = df[diseases].sum().sort_values(ascending=False)
 
-        # Визуализация
         axes[i].barh(disease_counts.index, disease_counts.values)
         axes[i].set_title(f'Распределение заболеваний: {name} ({len(df)} изображений)')
         axes[i].set_xlabel('Количество случаев')
 
-        # Добавим данные для сравнения
         for disease, count in disease_counts.items():
             comparison_data.append({
                 'Dataset': name,
@@ -75,11 +64,9 @@ def analyze_label_distribution(train_df, val_df, test_df, diseases):
                 'Percentage': count / len(df) * 100
             })
 
-    # Сравнительная визуализация
     comparison_df = pd.DataFrame(comparison_data)
     pivot_df = comparison_df.pivot(index='Disease', columns='Dataset', values='Percentage')
 
-    # Построим stacked bar chart
     axes[3].barh(pivot_df.index, pivot_df['Train'], label='Train', alpha=0.7)
     axes[3].barh(pivot_df.index, pivot_df['Validation'], left=pivot_df['Train'], label='Validation', alpha=0.7)
     axes[3].barh(pivot_df.index, pivot_df['Test'],
@@ -96,25 +83,20 @@ def analyze_label_distribution(train_df, val_df, test_df, diseases):
 
 
 def analyze_multi_label_stats(train_df, val_df, test_df, diseases):
-    """Анализ multi-label статистик"""
     results = []
 
     datasets = [train_df, val_df, test_df]
     dataset_names = ['Train', 'Validation', 'Test']
 
     for df, name in zip(datasets, dataset_names):
-        # Количество заболеваний на изображение
         disease_per_image = df[diseases].sum(axis=1)
         avg_diseases = disease_per_image.mean()
         max_diseases = disease_per_image.max()
 
-        # Процент изображений без заболеваний
         no_finding_percent = (df['No Finding'] == 1).mean() * 100
 
-        # Процент изображений с одним заболеванием
         single_disease_percent = (disease_per_image == 1).mean() * 100
 
-        # Процент изображений с множественными заболеваниями
         multi_disease_percent = (disease_per_image > 1).mean() * 100
 
         results.append({
@@ -127,7 +109,6 @@ def analyze_multi_label_stats(train_df, val_df, test_df, diseases):
             'Multiple Diseases %': multi_disease_percent
         })
 
-        # Визуализация распределения количества заболеваний
         plt.figure(figsize=(10, 6))
         disease_per_image.hist(bins=range(0, int(max_diseases) + 2), alpha=0.7, rwidth=0.8)
         plt.title(f'Распределение количества заболеваний на изображение: {name}')
@@ -140,11 +121,8 @@ def analyze_multi_label_stats(train_df, val_df, test_df, diseases):
 
 
 def analyze_correlations(df, diseases, dataset_name):
-    """Анализ корреляций между заболеваниями"""
-    # Матрица корреляций
     corr_matrix = df[diseases].corr()
 
-    # Визуализация тепловой карты корреляций
     plt.figure(figsize=(15, 12))
     mask = np.triu(np.ones_like(corr_matrix, dtype=bool))
     sns.heatmap(corr_matrix, mask=mask, annot=True, cmap='coolwarm', center=0,
@@ -153,7 +131,6 @@ def analyze_correlations(df, diseases, dataset_name):
     plt.savefig(f'../outputs/figures/correlation_{dataset_name.lower()}.png', dpi=300, bbox_inches='tight')
     plt.close()
 
-    # Найдем наиболее коррелированные пары заболеваний
     corr_pairs = []
     for i in range(len(corr_matrix.columns)):
         for j in range(i + 1, len(corr_matrix.columns)):
@@ -168,22 +145,16 @@ def analyze_correlations(df, diseases, dataset_name):
 
 
 def analyze_demographics(original_df, train_df, val_df, test_df):
-    """Анализ демографических данных"""
     demo_data = []
 
     datasets = [train_df, val_df, test_df]
     dataset_names = ['Train', 'Validation', 'Test']
 
     for df, name in zip(datasets, dataset_names):
-        # Получим соответствующие демографические данные
         demo_df = original_df[original_df['Image Index'].isin(df['Image Index'])].copy()
 
-        # Анализ распределения по полу
-        gender_counts = demo_df['Patient Gender'].value_counts()
         gender_percent = demo_df['Patient Gender'].value_counts(normalize=True) * 100
 
-        # Анализ распределения по возрасту
-        # Преобразуем возраст в числовой формат (некоторые значения могут быть строками)
         demo_df['Patient Age'] = pd.to_numeric(demo_df['Patient Age'], errors='coerce')
         avg_age = demo_df['Patient Age'].mean()
         age_std = demo_df['Patient Age'].std()
@@ -201,13 +172,11 @@ def analyze_demographics(original_df, train_df, val_df, test_df):
 
 
 def load_data():
-    """Загрузка всех подготовленных данных"""
     try:
         train_df = pd.read_csv('../data/train_labels.csv')
         val_df = pd.read_csv('../data/val_labels.csv')
         test_df = pd.read_csv('../data/test_labels.csv')
 
-        # Загрузим оригинальные данные для доступа к демографической информации
         original_df = pd.read_csv('../data/Data_Entry_2017.csv')
 
         return train_df, val_df, test_df, original_df
@@ -217,13 +186,7 @@ def load_data():
         return None, None, None, None
 
 def analyze_patient_distribution(original_df, train_df, val_df, test_df):
-    """Анализ распределения снимков по пациентам"""
-
-    # Используем оригинальный датафрейм для получения Patient ID
-    # Сопоставляем Image Index с Patient ID из оригинального датафрейма
-
     def get_patient_stats(original_df, image_indices, dataset_name):
-        # Получаем соответствующие данные из оригинального датафрейма
         df_subset = original_df[original_df['Image Index'].isin(image_indices)]
 
         patient_counts = df_subset['Patient ID'].value_counts()
@@ -242,7 +205,6 @@ def analyze_patient_distribution(original_df, train_df, val_df, test_df):
 
         return stats, patient_counts
 
-    # Собираем статистику по всем наборам
     train_stats, train_patient_counts = get_patient_stats(
         original_df, train_df['Image Index'].values, 'Train'
     )
@@ -253,10 +215,8 @@ def analyze_patient_distribution(original_df, train_df, val_df, test_df):
         original_df, test_df['Image Index'].values, 'Test'
     )
 
-    # Визуализация распределения
     plt.figure(figsize=(15, 10))
 
-    # Гистограмма распределения количества снимков на пациента
     plt.subplot(2, 2, 1)
     plt.hist(train_patient_counts, bins=50, alpha=0.7, label='Train')
     plt.hist(val_patient_counts, bins=50, alpha=0.7, label='Validation')
@@ -265,16 +225,14 @@ def analyze_patient_distribution(original_df, train_df, val_df, test_df):
     plt.ylabel('Количество пациентов')
     plt.title('Распределение снимков по пациентам')
     plt.legend()
-    plt.yscale('log')  # Логарифмическая шкала для лучшей визуализации
+    plt.yscale('log')
 
-    # Боксплот распределения
     plt.subplot(2, 2, 2)
     data = [train_patient_counts.values, val_patient_counts.values, test_patient_counts.values]
     plt.boxplot(data, labels=['Train', 'Validation', 'Test'])
     plt.title('Боксплот распределения снимков по пациентам')
     plt.ylabel('Количество снимков на пациента')
 
-    # Топ-20 пациентов с наибольшим количеством снимков
     plt.subplot(2, 2, 3)
     top_patients = train_patient_counts.head(20)
     plt.bar(range(len(top_patients)), top_patients.values)
@@ -282,12 +240,11 @@ def analyze_patient_distribution(original_df, train_df, val_df, test_df):
     plt.title('Топ-20 пациентов (Train set)')
     plt.ylabel('Количество снимков')
 
-    # Cumulative distribution
     plt.subplot(2, 2, 4)
     sorted_counts = np.sort(train_patient_counts.values)[::-1]
     cumulative = np.cumsum(sorted_counts) / np.sum(sorted_counts)
     plt.plot(range(1, len(cumulative) + 1), cumulative)
-    plt.xlabel('Пациенты (отсортированы по количеству снимков)')
+    plt.xlabel('Пациенты')
     plt.ylabel('Доля от общего количества снимков')
     plt.title('Кумулятивное распределение снимков по пациентам')
     plt.grid(True)
@@ -296,7 +253,6 @@ def analyze_patient_distribution(original_df, train_df, val_df, test_df):
     plt.savefig('../outputs/figures/patient_distribution.png', dpi=300, bbox_inches='tight')
     plt.close()
 
-    # Сводная статистика
     stats_df = pd.DataFrame([train_stats, val_stats, test_stats])
     print("\n=== РАСПРЕДЕЛЕНИЕ ПО ПАЦИЕНТАМ ===")
     print(stats_df.to_string(index=False))
@@ -305,24 +261,16 @@ def analyze_patient_distribution(original_df, train_df, val_df, test_df):
 
 
 def main():
-    """Основная функция EDA"""
     print("Загрузка данных...")
     train_df, val_df, test_df, original_df = load_data()
 
-    # Проверим, что данные загрузились успешно
     if train_df is None:
         return
 
-    # Получим список заболеваний (исключим служебные колонки)
     diseases = [col for col in train_df.columns if col not in ['Image Index', 'image_path']]
 
-    # Создадим папку для результатов
     os.makedirs('../outputs/figures', exist_ok=True)
 
-    print("1. Проверка пересечения пациентов между наборами...")
-    train_patients, val_patients, test_patients = check_patient_overlap(
-        original_df, train_df, val_df, test_df
-    )
 
     print("\n2. Анализ распределения меток...")
     label_stats = analyze_label_distribution(
@@ -335,7 +283,6 @@ def main():
     )
 
     print("\n4. Анализ корреляций между заболеваниями...")
-    # Для корреляционного анализа объединим все данные
     all_df = pd.concat([train_df, val_df, test_df])
     correlation_stats = analyze_correlations(all_df, diseases, 'All')
 
@@ -345,13 +292,11 @@ def main():
         train_df, val_df, test_df
     )
 
-    # Сохраним все результаты в CSV
     label_stats.to_csv('../outputs/label_statistics.csv', index=False)
     multi_label_stats.to_csv('../outputs/multi_label_statistics.csv', index=False)
     correlation_stats.to_csv('../outputs/correlation_statistics.csv', index=False)
     demographic_stats.to_csv('../outputs/demographic_statistics.csv', index=False)
 
-    # Выведем сводку результатов
     print("\n" + "=" * 50)
     print("СВОДКА РЕЗУЛЬТАТОВ EDA")
     print("=" * 50)
@@ -367,7 +312,6 @@ def main():
     print(correlation_stats.head(10).to_string(index=False))
 
     print("\n6. Анализ распределения снимков по пациентам...")
-    patient_stats = analyze_patient_distribution(original_df, train_df, val_df, test_df)
 
     print(f"\nРезультаты сохранены в папке ../outputs/")
     print("Визуализации сохранены в папке ../outputs/figures/")

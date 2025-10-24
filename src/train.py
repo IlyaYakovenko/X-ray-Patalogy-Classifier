@@ -35,7 +35,7 @@ class Trainer:
             'val_macro_f1': [], 'val_micro_f1': [], 'learning_rates': []
         }
 
-        print("🎯 ИНИЦИАЛИЗАЦИЯ ТРЕНЕРА")
+        print("ИНИЦИАЛИЗАЦИЯ ТРЕНЕРА")
         print(f"Конфигурация: {json.dumps(config, indent=2)}")
 
     def _create_directories(self):
@@ -44,9 +44,8 @@ class Trainer:
         os.makedirs('/content/drive/MyDrive/X-ray/outputs/logs', exist_ok=True)
 
     def setup_data(self):
-        print("\n📊 ПОДГОТОВКА ДАННЫХ")
+        print("\nПОДГОТОВКА ДАННЫХ")
 
-        # Трансформации
         train_transform = A.Compose([
             A.HorizontalFlip(p=0.5),
             A.Rotate(limit=10, p=0.3),
@@ -60,13 +59,11 @@ class Trainer:
             ToTensorV2(),
         ])
 
-        # Сбалансированные датасеты
         train_dataset = BalancedAugmentationChestXRayDataset(
             csv_path='/content/drive/MyDrive/X-ray/data/train_labels.csv',
             transform=train_transform
         )
 
-        # Для валидации используем обычный датасет без аугментаций
         val_dataset = ChestXRayDataset(
             csv_path='/content/drive/MyDrive/X-ray/data/val_labels.csv',
             transform=val_transform
@@ -89,11 +86,11 @@ class Trainer:
         )
 
         self.diseases = train_dataset.diseases
-        print(f"✓ Тренировочный набор: {len(train_dataset)} изображений")
-        print(f"✓ Валидационный набор: {len(val_dataset)} изображений")
+        print(f"Тренировочный набор: {len(train_dataset)} изображений")
+        print(f"Валидационный набор: {len(val_dataset)} изображений")
 
     def setup_model(self):
-        print("\n🤖 НАСТРОЙКА МОДЕЛИ")
+        print("\nНАСТРОЙКА МОДЕЛИ")
 
         self.model = ChestXRayModel(
             num_classes=len(self.diseases),
@@ -101,10 +98,8 @@ class Trainer:
             freeze_backbone=self.config['freeze_backbone']
         )
 
-        # Передаем diseases в модель
         self.model.diseases = self.diseases
 
-        # Настраиваем обучение (без весов!)
         self.optimizer, self.criterion = self.model.setup_training(
             learning_rate=self.config['learning_rate'],
             optimizer_type=self.config['optimizer'],
@@ -115,7 +110,6 @@ class Trainer:
             self.optimizer, mode='max', factor=0.5, patience=3
         )
 
-    # Остальные методы остаются без изменений
     def train_epoch(self):
         self.model.train()
         running_loss = 0.0
@@ -163,7 +157,7 @@ class Trainer:
         threshold = self.config.get('threshold', 0.3)
         macro_f1, micro_f1 = self.calculate_f1(all_labels, all_preds, threshold)
 
-        print("\n📊 AUC по классам:")
+        print("\nAUC по классам:")
         auc_scores = []
         for i, disease in enumerate(self.diseases):
             try:
@@ -171,19 +165,18 @@ class Trainer:
                 auc_scores.append(auc)
 
                 if auc > 0.7:
-                    print(f"✅ {disease}: {auc:.4f}")
+                    print(f"{disease}: {auc:.4f}")
                 elif auc < 0.6:
-                    print(f"⚠️  {disease}: {auc:.4f}")
+                    print(f"{disease}: {auc:.4f}")
                 else:
                     print(f"   {disease}: {auc:.4f}")
             except ValueError:
                 auc_scores.append(0.5)
-                print(f"❌ {disease}: невозможно вычислить AUC")
+                print(f"{disease}: невозможно вычислить AUC")
 
         return val_loss, val_auc, macro_f1, micro_f1
 
     def calculate_auc(self, labels, preds):
-        """Вычисляет средний AUC по всем классам."""
         auc_scores = []
         for i in range(labels.shape[1]):
             if len(np.unique(labels[:, i])) >= 2:
@@ -222,7 +215,7 @@ class Trainer:
         if is_best:
             best_model_path = "/content/drive/MyDrive/X-ray/outputs/models/best_model.pth"
             torch.save(self.model.state_dict(), best_model_path)
-            print(f"✓ Новая лучшая модель сохранена: {best_model_path}")
+            print(f"Лучшая модель сохранена: {best_model_path}")
 
     def plot_training_history(self):
         fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(15, 10))
@@ -253,10 +246,10 @@ class Trainer:
         plt.tight_layout()
         plt.savefig('/content/drive/MyDrive/X-ray/outputs/figures/training_history.png', dpi=300, bbox_inches='tight')
         plt.close()
-        print("✓ Графики обучения сохранены")
+        print("Графики сохранены")
 
     def train(self):
-        print("\n🚀 ЗАПУСК ОБУЧЕНИЯ")
+        print("\nЗАПУСК ОБУЧЕНИЯ")
         print("=" * 60)
 
         self.setup_data()
@@ -268,7 +261,7 @@ class Trainer:
         for epoch in range(1, self.config['num_epochs'] + 1):
             epoch_start = time.time()
 
-            print(f"\n📅 ЭПОХА {epoch}/{self.config['num_epochs']}")
+            print(f"\nЭПОХА {epoch}/{self.config['num_epochs']}")
             print("-" * 50)
 
             train_loss = self.train_epoch()
@@ -277,7 +270,6 @@ class Trainer:
             current_lr = self.optimizer.param_groups[0]['lr']
             self.scheduler.step(val_auc)
 
-            # Сохраняем историю
             self.history['train_loss'].append(train_loss)
             self.history['val_loss'].append(val_loss)
             self.history['val_auc'].append(val_auc)
@@ -285,7 +277,7 @@ class Trainer:
             self.history['val_micro_f1'].append(micro_f1)
             self.history['learning_rates'].append(current_lr)
 
-            print(f"\n📊 РЕЗУЛЬТАТЫ ЭПОХИ {epoch}:")
+            print(f"\nРЕЗУЛЬТАТЫ ЭПОХИ {epoch}:")
             print(f"  Train Loss: {train_loss:.4f}")
             print(f"  Val Loss:   {val_loss:.4f}")
             print(f"  Val AUC:    {val_auc:.4f}")
@@ -299,23 +291,22 @@ class Trainer:
             if val_auc > best_auc:
                 best_auc = val_auc
                 self.save_checkpoint(epoch, is_best=True)
-                print(f"🎉 НОВЫЙ РЕКОРД! AUC: {best_auc:.4f}")
+                print(f" AUC: {best_auc:.4f}")
 
         total_time = time.time() - start_time
-        print(f"\n✅ ОБУЧЕНИЕ ЗАВЕРШЕНО за {total_time / 60:.1f} мин")
+        print(f"\nОБУЧЕНИЕ ЗАВЕРШЕНО за {total_time / 60:.1f} мин")
         print(f"Лучшая AUC: {best_auc:.4f}")
 
         self.plot_training_history()
         self.save_checkpoint(self.config['num_epochs'])
 
-        # Сохраняем логи
         history_df = pd.DataFrame(self.history)
         history_df.to_csv('/content/drive/MyDrive/X-ray/outputs/logs/training_history.csv', index=False)
 
         with open('/content/drive/MyDrive/X-ray/outputs/logs/training_config.json', 'w') as f:
             json.dump(self.config, f, indent=2)
 
-        print("✓ Все результаты сохранены")
+        print("Все результаты сохранены")
 
 
 TRAINING_CONFIG = {
@@ -329,18 +320,12 @@ TRAINING_CONFIG = {
     'num_workers': 2,
     'threshold': 0.1,
     'weight_decay': 1.7744079336785624e-05,
-    # Убрали max_weight и augmentation_multiplier, так как они больше не нужны
 }
 
-print("🩺 ТРЕНИРОВКА МОДЕЛИ ДЛЯ КЛАССИФИКАЦИИ РЕНТГЕНОВСКИХ СНИМКОВ")
-print("=" * 70)
 
 trainer = Trainer(TRAINING_CONFIG)
 
 try:
     trainer.train()
-except KeyboardInterrupt:
-    print("\n⚠️ Обучение прервано пользователем")
 except Exception as e:
-    print(f"\n❌ Ошибка во время обучения: {e}")
-    raise
+    print(f"\nОшибка во время обучения: {e}")
